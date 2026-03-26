@@ -2,13 +2,15 @@
  * app.js – Main application logic for the Astra Ring Sound Machine.
  *
  * Handles:
- *  - Rendering rings
+ *  - Rendering rings (with drag-to-reorder grip handles and ♭/♯ semitone buttons)
  *  - Mode switching (single / chord / pattern)
  *  - Tap-to-loop per ring
  *  - Pointer-drag note bending (drag up = pitch up, drag down = pitch down)
+ *  - Per-ring semitone offset via ♭/♯ buttons
+ *  - Pulse animation toggle (off by default)
  *  - Sustain hold button
  *  - Repeat-pattern hold button
- *  - Pattern editor modal (+ button)
+ *  - Pattern editor modal with preset buttons + custom input
  *  - Recording events → saving as tokens
  *  - Playback of saved tokens
  */
@@ -20,17 +22,23 @@
   let currentMode       = 'single';
   let sustainActive     = false;
   let repeatActive      = false;
+  let pulseActive       = false;
   let isRecording       = false;
   let recordStart       = 0;
   let recordEvents      = [];
   let patternTargetRing = null;  // ring id being edited in modal
 
   // Bend state per-pointer
-  const bendState = {};   // pointerId → { startY, ringId }
+  const bendState = {};   // pointerId → { startY, ringId, hasDragged }
   let globalBendSemitones = 0;
 
   // Repeat-loop handles per ring
   const loopHandles = {};
+
+  // Drag-to-reorder state
+  let dragId     = null;   // ring id being dragged
+  let dragOverId = null;   // ring id currently hovered during drag
+  let dragGripEl = null;   // the grip element that captured the pointer
 
   const BPM                 = 120;
   const SUSTAIN_DUR         = 2.0;   // seconds when sustain is active
@@ -40,19 +48,21 @@
   const CHORD_LOOP_MS       = 900;   // chord loop interval (ms)
 
   // ── DOM refs ──────────────────────────────────────────────────────────
-  const ringStage      = document.getElementById('ringStage');
-  const bendIndicator  = document.getElementById('bendIndicator');
-  const btnSustain     = document.getElementById('btnSustain');
-  const btnRepeat      = document.getElementById('btnRepeat');
-  const btnAdd         = document.getElementById('btnAdd');
-  const btnRecord      = document.getElementById('btnRecord');
-  const btnStopAll     = document.getElementById('btnStopAll');
-  const patternModal   = document.getElementById('patternModal');
+  const ringStage        = document.getElementById('ringStage');
+  const bendIndicator    = document.getElementById('bendIndicator');
+  const btnSustain       = document.getElementById('btnSustain');
+  const btnRepeat        = document.getElementById('btnRepeat');
+  const btnPulse         = document.getElementById('btnPulse');
+  const btnAdd           = document.getElementById('btnAdd');
+  const btnRecord        = document.getElementById('btnRecord');
+  const btnStopAll       = document.getElementById('btnStopAll');
+  const patternModal     = document.getElementById('patternModal');
   const patternRingLabel = document.getElementById('patternRingLabel');
-  const patternInput   = document.getElementById('patternInput');
-  const patternSave    = document.getElementById('patternSave');
-  const patternCancel  = document.getElementById('patternCancel');
-  const tokenList      = document.getElementById('tokenList');
+  const patternInput     = document.getElementById('patternInput');
+  const patternSave      = document.getElementById('patternSave');
+  const patternCancel    = document.getElementById('patternCancel');
+  const presetGrid       = document.getElementById('presetGrid');
+  const tokenList        = document.getElementById('tokenList');
 
   // ── Ring Rendering ────────────────────────────────────────────────────
   function buildRings() {
@@ -60,13 +70,20 @@
     ringState.forEach(r => {
       const wrapper = document.createElement('div');
       wrapper.className = 'ring-wrapper';
+      wrapper.dataset.ringId = r.id;
+
+      // Grip handle for drag-to-reorder
+      const grip = document.createElement('div');
+      grip.className = 'ring-move-handle';
+      grip.title = 'Drag to reorder';
+      grip.textContent = '⠿';
+      grip.addEventListener('pointerdown', onGripPointerDown);
 
       const ring = document.createElement('div');
       ring.className = 'ring';
       ring.id = `ring-${r.id}`;
       ring.dataset.ringId = r.id;
       ring.style.borderColor = r.color;
-      ring.style.setProperty('--ring-accent', r.color);
 
       const noteName = document.createElement('span');
       noteName.className = 'ring-note-name';
@@ -79,15 +96,44 @@
       label.className = 'ring-label';
       label.textContent = r.name;
 
+      // ♭ / offset-display / ♯ controls
+      const bendControls = document.createElement('div');
+      bendControls.className = 'ring-bend-controls';
+
+      const flatBtn = document.createElement('button');
+      flatBtn.className = 'semitone-btn flat-btn';
+      flatBtn.textContent = '♭';
+      flatBtn.title = 'Flatten pitch by 1 semitone';
+      flatBtn.dataset.ringId = r.id;
+      flatBtn.addEventListener('click', onFlatBtn);
+
+      const offsetDisplay = document.createElement('span');
+      offsetDisplay.className = 'semitone-offset';
+      offsetDisplay.id = `offset-${r.id}`;
+      offsetDisplay.textContent = '0';
+
+      const sharpBtn = document.createElement('button');
+      sharpBtn.className = 'semitone-btn sharp-btn';
+      sharpBtn.textContent = '♯';
+      sharpBtn.title = 'Sharpen pitch by 1 semitone';
+      sharpBtn.dataset.ringId = r.id;
+      sharpBtn.addEventListener('click', onSharpBtn);
+
+      bendControls.appendChild(flatBtn);
+      bendControls.appendChild(offsetDisplay);
+      bendControls.appendChild(sharpBtn);
+
+      wrapper.appendChild(grip);
       wrapper.appendChild(ring);
       wrapper.appendChild(label);
+      wrapper.appendChild(bendControls);
       ringStage.appendChild(wrapper);
 
-      // Events
-      ring.addEventListener('pointerdown',  onRingPointerDown);
-      ring.addEventListener('pointermove',  onRingPointerMove);
-      ring.addEventListener('pointerup',    onRingPointerUp);
-      ring.addEventListener('pointercancel',onRingPointerUp);
+      // Ring sound / bend events
+      ring.addEventListener('pointerdown',   onRingPointerDown);
+      ring.addEventListener('pointermove',   onRingPointerMove);
+      ring.addEventListener('pointerup',     onRingPointerUp);
+      ring.addEventListener('pointercancel', onRingPointerUp);
     });
   }
 
@@ -102,6 +148,14 @@
     ringState.forEach(r => updateRingNoteDisplay(r.id));
   }
 
+  function updateOffsetDisplay(ringId) {
+    const el = document.getElementById(`offset-${ringId}`);
+    if (!el) return;
+    const offset = ringState[ringId].semitoneOffset;
+    el.textContent = offset > 0 ? `+${offset}` : `${offset}`;
+    el.style.color = offset !== 0 ? 'var(--accent2)' : 'var(--muted)';
+  }
+
   // ── Mode Switching ────────────────────────────────────────────────────
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -114,30 +168,30 @@
 
   // ── Play Helpers ──────────────────────────────────────────────────────
   function playRing(ringId, bend = globalBendSemitones) {
-    const notes = getRingNotes(ringId, currentMode);
-    const dur   = sustainActive ? SUSTAIN_DUR : BASE_DUR;
+    const notes     = getRingNotes(ringId, currentMode);
+    const dur       = sustainActive ? SUSTAIN_DUR : BASE_DUR;
+    const totalBend = bend + (ringState[ringId].semitoneOffset || 0);
 
     if (currentMode === 'single') {
-      AudioEngine.playNote(notes[0], dur, bend);
+      AudioEngine.playNote(notes[0], dur, totalBend);
     } else if (currentMode === 'chord') {
-      AudioEngine.playChord(notes, dur, bend);
+      AudioEngine.playChord(notes, dur, totalBend);
     } else {
-      AudioEngine.playPattern(notes, BPM, bend);
+      AudioEngine.playPattern(notes, BPM, totalBend);
     }
 
-    // Record event
     if (isRecording) {
       recordEvents.push({
         type: 'play',
         ringId,
         mode: currentMode,
-        bendSemitones: bend,
+        bendSemitones: totalBend,
         t: performance.now() - recordStart,
       });
     }
   }
 
-  // ── Ring Pointer Interactions ─────────────────────────────────────────
+  // ── Ring Pointer Interactions (sound + bend) ──────────────────────────
   function onRingPointerDown(e) {
     e.preventDefault();
     const ring   = e.currentTarget;
@@ -146,10 +200,7 @@
     ring.setPointerCapture(e.pointerId);
     ring.classList.add('active');
 
-    // Track drag start for bending; hasDragged is set when user moves > 1 semitone
     bendState[e.pointerId] = { startY: e.clientY, ringId, hasDragged: false };
-
-    // Play the ring on press
     playRing(ringId);
   }
 
@@ -175,14 +226,85 @@
     ring.classList.remove('active');
     delete bendState[e.pointerId];
 
-    // Reset bend display
     globalBendSemitones = 0;
     bendIndicator.textContent = 'Bend: 0 st';
 
-    // Quick tap (no drag) → toggle continuous loop for this ring
     if (!state?.hasDragged) {
       toggleLoop(ringId);
     }
+  }
+
+  // ── Per-ring semitone offset (♭/♯ buttons) ────────────────────────────
+  function onFlatBtn(e) {
+    e.stopPropagation();
+    const ringId = parseInt(e.currentTarget.dataset.ringId, 10);
+    ringState[ringId].semitoneOffset = Math.max(-12, (ringState[ringId].semitoneOffset || 0) - 1);
+    updateOffsetDisplay(ringId);
+  }
+
+  function onSharpBtn(e) {
+    e.stopPropagation();
+    const ringId = parseInt(e.currentTarget.dataset.ringId, 10);
+    ringState[ringId].semitoneOffset = Math.min(12, (ringState[ringId].semitoneOffset || 0) + 1);
+    updateOffsetDisplay(ringId);
+  }
+
+  // ── Drag-to-reorder (grip handle) ─────────────────────────────────────
+  function onGripPointerDown(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrapper = e.currentTarget.closest('.ring-wrapper');
+    dragId    = parseInt(wrapper.dataset.ringId, 10);
+    dragGripEl = e.currentTarget;
+    wrapper.classList.add('dragging');
+    dragGripEl.setPointerCapture(e.pointerId);
+    dragGripEl.addEventListener('pointermove',   onGripPointerMove);
+    dragGripEl.addEventListener('pointerup',     onGripPointerUp);
+    dragGripEl.addEventListener('pointercancel', onGripPointerUp);
+  }
+
+  function onGripPointerMove(e) {
+    if (dragId === null) return;
+    const wrappers = [...ringStage.querySelectorAll('.ring-wrapper:not(.dragging)')];
+    let closest = null;
+    let closestDist = Infinity;
+    wrappers.forEach(w => {
+      const rect = w.getBoundingClientRect();
+      const dist = Math.hypot(e.clientX - (rect.left + rect.width / 2),
+                              e.clientY - (rect.top  + rect.height / 2));
+      if (dist < closestDist) { closestDist = dist; closest = w; }
+    });
+    ringStage.querySelectorAll('.ring-wrapper').forEach(w => w.classList.remove('drag-over'));
+    if (closest && closestDist < 120) {
+      closest.classList.add('drag-over');
+      dragOverId = parseInt(closest.dataset.ringId, 10);
+    } else {
+      dragOverId = null;
+    }
+  }
+
+  function onGripPointerUp(e) {
+    if (dragId === null) return;
+    const draggingWrapper = ringStage.querySelector(`.ring-wrapper[data-ring-id="${dragId}"]`);
+    if (draggingWrapper) draggingWrapper.classList.remove('dragging');
+    ringStage.querySelectorAll('.ring-wrapper').forEach(w => w.classList.remove('drag-over'));
+    if (dragGripEl) {
+      dragGripEl.removeEventListener('pointermove',   onGripPointerMove);
+      dragGripEl.removeEventListener('pointerup',     onGripPointerUp);
+      dragGripEl.removeEventListener('pointercancel', onGripPointerUp);
+    }
+    if (dragOverId !== null && dragOverId !== dragId) {
+      const srcIdx = ringState.findIndex(r => r.id === dragId);
+      const dstIdx = ringState.findIndex(r => r.id === dragOverId);
+      if (srcIdx !== -1 && dstIdx !== -1) {
+        const [item] = ringState.splice(srcIdx, 1);
+        ringState.splice(dstIdx, 0, item);
+      }
+      buildRings();
+      updateAllNoteDisplays();
+      ringState.forEach(r => updateOffsetDisplay(r.id));
+    }
+    dragId = null; dragOverId = null; dragGripEl = null;
   }
 
   // ── Looping ───────────────────────────────────────────────────────────
@@ -196,20 +318,20 @@
 
   function startLoop(ringId) {
     if (loopHandles[ringId]) return;
-
     ringState[ringId].looping = true;
-    document.getElementById(`ring-${ringId}`).classList.add('looping');
+    const ringEl = document.getElementById(`ring-${ringId}`);
+    if (ringEl) {
+      ringEl.classList.add('looping');
+      if (pulseActive) ringEl.classList.add('pulsing');
+    }
 
     function getLoopMs() {
       if (currentMode === 'pattern') {
         return (getRingNotes(ringId, currentMode).length * 60 / BPM) * 1000;
       }
-      if (currentMode === 'chord') return CHORD_LOOP_MS;
-      return NOTE_LOOP_MS;
+      return currentMode === 'chord' ? CHORD_LOOP_MS : NOTE_LOOP_MS;
     }
 
-    // Delay the first repeat so it doesn't double-play immediately after
-    // the initial press that triggered the loop start.
     function tick() {
       playRing(ringId, 0);
       loopHandles[ringId] = setTimeout(tick, getLoopMs());
@@ -219,7 +341,8 @@
 
   function stopLoop(ringId) {
     ringState[ringId].looping = false;
-    document.getElementById(`ring-${ringId}`)?.classList.remove('looping');
+    const ringEl = document.getElementById(`ring-${ringId}`);
+    if (ringEl) ringEl.classList.remove('looping', 'pulsing');
     if (loopHandles[ringId]) {
       clearTimeout(loopHandles[ringId]);
       delete loopHandles[ringId];
@@ -232,26 +355,31 @@
 
   // ── Transport Buttons ─────────────────────────────────────────────────
 
-  // Sustain – toggle
   btnSustain.addEventListener('click', () => {
     sustainActive = !sustainActive;
     btnSustain.classList.toggle('active', sustainActive);
   });
 
-  // Repeat – toggle; when active, tapping a ring starts its loop
   btnRepeat.addEventListener('click', () => {
     repeatActive = !repeatActive;
     btnRepeat.classList.toggle('active', repeatActive);
     if (!repeatActive) stopAllLoops();
   });
 
-  // Pattern Editor (+ button) – opens modal for the currently active ring
-  // Without a specific ring context (no ring selected), default to ring 0
+  btnPulse.addEventListener('click', () => {
+    pulseActive = !pulseActive;
+    btnPulse.classList.toggle('active', pulseActive);
+    // Apply / remove pulse glow on all currently looping rings
+    document.querySelectorAll('.ring.looping').forEach(el => {
+      el.classList.toggle('pulsing', pulseActive);
+    });
+  });
+
   btnAdd.addEventListener('click', () => {
     openPatternModal(patternTargetRing ?? 0);
   });
 
-  // Allow right-clicking a ring to jump directly to its pattern editor
+  // Right-click a ring → open its pattern editor
   ringStage.addEventListener('contextmenu', e => {
     const ring = e.target.closest('.ring');
     if (!ring) return;
@@ -259,22 +387,16 @@
     openPatternModal(parseInt(ring.dataset.ringId, 10));
   });
 
-  // Update patternTargetRing on ring press so + button knows which ring
+  // Track last-touched ring for + button
   ringStage.addEventListener('pointerdown', e => {
     const ring = e.target.closest('.ring');
     if (ring) patternTargetRing = parseInt(ring.dataset.ringId, 10);
   });
 
-  // Record
   btnRecord.addEventListener('click', () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
+    if (isRecording) stopRecording(); else startRecording();
   });
 
-  // Stop All
   btnStopAll.addEventListener('click', () => {
     AudioEngine.stopAll();
     stopAllLoops();
@@ -293,13 +415,9 @@
     isRecording = false;
     btnRecord.classList.remove('recording');
     btnRecord.textContent = '⏺ Record';
-
     if (recordEvents.length === 0) return;
-
-    // Prompt for clip name
     const name = prompt('Save clip as token — enter a name:', `Clip ${TokenStore.getAll().length + 1}`);
-    if (name === null) return;   // user cancelled
-
+    if (name === null) return;
     TokenStore.saveToken(name, recordEvents);
     renderTokens();
   }
@@ -309,6 +427,25 @@
     patternTargetRing = ringId;
     patternRingLabel.textContent = ringState[ringId].name;
     patternInput.value = ringState[ringId].pattern.join(' ');
+
+    // Populate preset buttons (each transposed to this ring's root note)
+    presetGrid.innerHTML = '';
+    PATTERN_PRESETS.forEach(preset => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn';
+      btn.textContent = preset.name;
+      btn.title = `Apply "${preset.name}" transposed to ${ringState[ringId].baseNote}`;
+      btn.addEventListener('click', () => {
+        const notes = transposePattern(ringState[ringId].baseNote, preset.intervals);
+        if (notes.length) {
+          setRingPattern(ringId, notes);
+          updateRingNoteDisplay(ringId);
+        }
+        closePatternModal();
+      });
+      presetGrid.appendChild(btn);
+    });
+
     patternModal.classList.remove('hidden');
     patternInput.focus();
   }
@@ -346,7 +483,6 @@
       tokenList.innerHTML = '<p class="empty-tokens">No tokens yet. Record a clip to create one!</p>';
       return;
     }
-
     tokenList.innerHTML = '';
     tokens.forEach(token => {
       const card = document.createElement('div');
@@ -363,7 +499,6 @@
       `;
       tokenList.appendChild(card);
     });
-
     tokenList.querySelectorAll('.btn-play').forEach(btn => {
       btn.addEventListener('click', () => playToken(btn.dataset.id));
     });
@@ -378,7 +513,6 @@
   function playToken(tokenId) {
     const token = TokenStore.getToken(tokenId);
     if (!token || token.events.length === 0) return;
-
     token.events.forEach(ev => {
       setTimeout(() => {
         const notes = getRingNotes(ev.ringId, ev.mode);

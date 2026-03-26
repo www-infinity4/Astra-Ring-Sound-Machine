@@ -76,8 +76,18 @@ header h1 { font-size: 2rem; letter-spacing: .04em; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   user-select: none;
+  transition: opacity .2s;
+}
+
+.ring-wrapper.dragging {
+  opacity: .35;
+}
+
+.ring-wrapper.drag-over .ring {
+  border-color: var(--accent2) !important;
+  box-shadow: 0 0 0 3px var(--accent2), 0 0 22px var(--accent2);
 }
 
 .ring {
@@ -110,6 +120,10 @@ header h1 { font-size: 2rem; letter-spacing: .04em; }
 }
 
 .ring.looping {
+  /* no animation by default; enable with 💫 Pulse toggle */
+}
+
+.ring.pulsing {
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -126,6 +140,52 @@ header h1 { font-size: 2rem; letter-spacing: .04em; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- Ring move handle ---- */
+.ring-move-handle {
+  font-size: 1.1rem;
+  cursor: grab;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  touch-action: none;
+  transition: color .15s, background .15s;
+}
+.ring-move-handle:hover { color: var(--text); background: rgba(255,255,255,.08); }
+.ring-move-handle:active { cursor: grabbing; }
+
+/* ---- Per-ring semitone (♭/♯) controls ---- */
+.ring-bend-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.semitone-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: .8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: background .1s, border-color .1s;
+}
+.semitone-btn:hover { background: var(--accent); }
+.semitone-offset {
+  font-size: .7rem;
+  color: var(--muted);
+  min-width: 26px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .ring-note-name {
@@ -230,6 +290,35 @@ header h1 { font-size: 2rem; letter-spacing: .04em; }
 }
 .modal-actions button:first-child {
   background: var(--accent);
+}
+
+/* ---- Modal divider ---- */
+.modal-divider {
+  border: none;
+  border-top: 1px solid #2a2a44;
+  margin: 0;
+}
+
+/* ---- Preset pattern grid ---- */
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.preset-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: .8rem;
+  transition: background .1s, border-color .1s, box-shadow .1s;
+}
+.preset-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 8px var(--accent);
 }
 
 /* ---- Tokens Panel ---- */

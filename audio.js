@@ -22,6 +22,8 @@ const AudioEngine = (() => {
   const NOTE_MAP = { C:0, 'C#':1, Db:1, D:2, 'D#':3, Eb:3, E:4, F:5,
                      'F#':6, Gb:6, G:7, 'G#':8, Ab:8, A:9, 'A#':10, Bb:10, B:11 };
 
+  const MIDI_NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
   function noteToFreq(note) {
     const m = note.trim().match(/^([A-Ga-g][#b]?)(\d)$/);
     if (!m) return null;
@@ -29,6 +31,22 @@ const AudioEngine = (() => {
     if (semitone === undefined) return null;
     const octave = parseInt(m[2], 10);
     return 440 * Math.pow(2, (semitone - 9 + (octave - 4) * 12) / 12);
+  }
+
+  /** Convert a note name (e.g. "C4") to a MIDI number. Returns null on failure. */
+  function noteToMidi(note) {
+    const m = note.trim().match(/^([A-Ga-g][#b]?)(\d)$/);
+    if (!m) return null;
+    const semitone = NOTE_MAP[m[1].toUpperCase()] ?? NOTE_MAP[m[1]];
+    if (semitone === undefined) return null;
+    return (parseInt(m[2], 10) + 1) * 12 + semitone;
+  }
+
+  /** Convert a MIDI number to a note name (e.g. 60 → "C4"). Returns null for out-of-range. */
+  function midiToNote(midi) {
+    if (midi < 0 || midi > 127) return null;
+    const octave = Math.floor(midi / 12) - 1;
+    return `${MIDI_NOTE_NAMES[midi % 12]}${octave}`;
   }
 
   // ---------- Core tone builder ----------
@@ -131,5 +149,5 @@ const AudioEngine = (() => {
     active.clear();
   }
 
-  return { noteToFreq, playNote, playChord, playPattern, stopAll, getCtx };
+  return { noteToFreq, noteToMidi, midiToNote, playNote, playChord, playPattern, stopAll, getCtx };
 })();

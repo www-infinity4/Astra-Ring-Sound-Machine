@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Astra Ring Sound Machine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>🪐 Astra Ring Sound Machine</h1>
+      <p class="subtitle">An AI-crafted musical instrument</p>
+    </header>
+
+    <!-- Mode Toggle -->
+    <section class="mode-bar" aria-label="Play mode">
+      <span class="mode-label">Mode:</span>
+      <button class="mode-btn active" data-mode="single" title="Single note per ring">Single Note</button>
+      <button class="mode-btn" data-mode="chord"   title="Chord per ring">Chord</button>
+      <button class="mode-btn" data-mode="pattern" title="Melodic pattern per ring">Pattern</button>
+    </section>
+
+    <!-- Ring Stage -->
+    <section class="ring-stage" id="ringStage" aria-label="Ring instrument">
+      <!-- Rings rendered by JS -->
+    </section>
+
+    <!-- Transport Controls -->
+    <section class="transport" aria-label="Transport controls">
+      <button id="btnSustain"  class="transport-btn" title="Hold to sustain note">⏸ Sustain</button>
+      <button id="btnRepeat"   class="transport-btn" title="Hold to repeat pattern">🔁 Repeat</button>
+      <button id="btnAdd"      class="transport-btn" title="Click to open pattern editor">➕ Pattern</button>
+      <button id="btnRecord"   class="transport-btn" title="Start / stop recording">⏺ Record</button>
+      <button id="btnStopAll"  class="transport-btn" title="Stop all sounds">⏹ Stop All</button>
+    </section>
+
+    <!-- Bend indicator -->
+    <div id="bendIndicator" class="bend-indicator" aria-live="polite">Bend: 0 st</div>
+
+    <!-- Pattern Editor Modal -->
+    <div id="patternModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="patternModalTitle">
+      <div class="modal-content">
+        <h2 id="patternModalTitle">Edit Pattern for Ring <span id="patternRingLabel"></span></h2>
+        <p class="hint">Enter note names separated by spaces (e.g. <code>C4 E4 G4 C5</code>)</p>
+        <input type="text" id="patternInput" class="pattern-input" placeholder="C4 E4 G4 C5" />
+        <div class="modal-actions">
+          <button id="patternSave">Save</button>
+          <button id="patternCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tokens Panel -->
+    <section class="tokens-panel" aria-label="Saved tokens">
+      <h2>🎵 My Tokens</h2>
+      <p class="hint">Record a clip and save it as a token to replay or share.</p>
+      <div id="tokenList" class="token-list">
+        <!-- filled by JS -->
+      </div>
+    </section>
+  </div>
+
+  <script src="audio.js"></script>
+  <script src="rings.js"></script>
+  <script src="tokens.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

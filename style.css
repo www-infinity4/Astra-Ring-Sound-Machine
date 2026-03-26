@@ -1,0 +1,294 @@
+/* ============================================================
+   Astra Ring Sound Machine – Styles
+   ============================================================ */
+
+:root {
+  --bg:        #0d0d1a;
+  --surface:   #1a1a2e;
+  --accent:    #7b2ff7;
+  --accent2:   #00d4ff;
+  --text:      #e8e8f0;
+  --muted:     #6a6a8a;
+  --danger:    #ff4466;
+  --success:   #22dd88;
+  --ring-size: 110px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px 60px;
+}
+
+#app {
+  width: 100%;
+  max-width: 840px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ---- Header ---- */
+header { text-align: center; }
+header h1 { font-size: 2rem; letter-spacing: .04em; }
+.subtitle { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+
+/* ---- Mode Bar ---- */
+.mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mode-label { color: var(--muted); font-size: .85rem; }
+.mode-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: .85rem;
+  transition: background .15s, color .15s;
+}
+.mode-btn.active,
+.mode-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---- Ring Stage ---- */
+.ring-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.ring-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.ring {
+  width:  var(--ring-size);
+  height: var(--ring-size);
+  border-radius: 50%;
+  border: 4px solid var(--accent);
+  background: radial-gradient(circle at 35% 35%, #2a1a4e, var(--surface));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .75rem;
+  color: var(--muted);
+  transition: border-color .1s, box-shadow .1s, transform .08s;
+  position: relative;
+  touch-action: none;   /* allow pointer events on touch */
+}
+
+.ring:hover {
+  border-color: var(--accent2);
+  box-shadow: 0 0 18px var(--accent2);
+}
+
+.ring.active {
+  border-color: var(--accent2);
+  box-shadow: 0 0 28px var(--accent2), 0 0 8px var(--accent);
+  transform: scale(1.07);
+  background: radial-gradient(circle at 35% 35%, #1a2a4e, #1a1a3a);
+}
+
+.ring.looping {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 14px var(--accent); }
+  50%       { box-shadow: 0 0 30px var(--accent2), 0 0 10px var(--accent); }
+}
+
+.ring-label {
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: center;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ring-note-name {
+  font-weight: 700;
+  font-size: .95rem;
+  color: var(--text);
+  pointer-events: none;
+}
+
+/* ---- Transport ---- */
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.transport-btn {
+  padding: 10px 22px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: .9rem;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.transport-btn:hover {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+.transport-btn.active {
+  background: var(--accent);
+  border-color: var(--accent2);
+  box-shadow: 0 0 14px var(--accent2);
+}
+#btnRecord.recording {
+  background: var(--danger);
+  border-color: var(--danger);
+  animation: recblink 1s ease-in-out infinite;
+}
+@keyframes recblink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .55; }
+}
+
+/* ---- Bend Indicator ---- */
+.bend-indicator {
+  text-align: center;
+  font-size: .85rem;
+  color: var(--accent2);
+  letter-spacing: .05em;
+  min-height: 1.2em;
+}
+
+/* ---- Modal ---- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal.hidden { display: none; }
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 28px;
+  width: min(480px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-content h2 { font-size: 1.1rem; }
+.hint { font-size: .8rem; color: var(--muted); }
+.hint code { background: #111; padding: 1px 5px; border-radius: 4px; }
+.pattern-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.modal-actions button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: .9rem;
+}
+.modal-actions button:first-child {
+  background: var(--accent);
+}
+
+/* ---- Tokens Panel ---- */
+.tokens-panel {
+  border-top: 1px solid #2a2a44;
+  padding-top: 24px;
+}
+.tokens-panel h2 { font-size: 1.2rem; margin-bottom: 8px; }
+
+.token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.token-card {
+  background: var(--surface);
+  border: 1px solid #2a2a44;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.token-card .token-info {
+  flex: 1;
+  min-width: 160px;
+}
+.token-card .token-name {
+  font-weight: 600;
+  font-size: .95rem;
+}
+.token-card .token-meta {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.token-card .token-actions {
+  display: flex;
+  gap: 8px;
+}
+.token-card button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: .8rem;
+}
+.token-card button:hover { background: var(--accent); }
+.token-card .btn-delete { border-color: var(--danger); }
+.token-card .btn-delete:hover { background: var(--danger); }
+
+.empty-tokens {
+  color: var(--muted);
+  font-size: .85rem;
+  text-align: center;
+  padding: 20px;
+}
